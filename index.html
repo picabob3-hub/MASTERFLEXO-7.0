@@ -1842,11 +1842,14 @@
 
 // Registro del Service Worker para permitir la instalación
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js')
-    .then(reg => console.log('Masterflexo PWA Lista'))
-    .catch(err => console.log('Error de PWA', err));
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('✅ PWA: Service Worker registrado con éxito', reg.scope))
+            .catch(err => console.error('❌ PWA: Error al registrar el Service Worker', err));
+    });
 }
 
 </script>
 </body>
 </html>
+
