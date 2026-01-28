@@ -1717,7 +1717,7 @@
     document.getElementById('p_num_secuencia').innerText = "N° " + numActual.toString().padStart(4, '0');
     localStorage.setItem('mf_num_proforma', numActual + 1);
 
-    // 2. Datos Generales
+    // 2. Datos Generales y Logo
     const logo = localStorage.getItem('mf_logo');
     if(logo) document.getElementById('print_logo_img').src = logo;
     document.getElementById('p_cliente').innerText = document.getElementById('c_nom').value || "CONSUMIDOR FINAL";
@@ -1725,10 +1725,16 @@
     document.getElementById('p_fecha').innerText = document.getElementById('fecha').value;
     document.getElementById('p_footer_text').innerHTML = (document.getElementById('txt_datos_empresa').value || "").replace(/\n/g, '<br>');
 
-    const tablaCuerpo = document.getElementById('p_tabla_cuerpo');
-    tablaCuerpo.innerHTML = ""; // Limpiamos la tabla para armarla de cero
+    // --- CARGAR DATOS DE FIRMA AUTORIZADA (LO QUE FALTABA) ---
+    document.getElementById('p_firma_nom').innerText = localStorage.getItem('mf_firma_nom') || "";
+    document.getElementById('p_firma_cargo').innerText = localStorage.getItem('mf_firma_cargo') || "";
 
-    let subtotalGeneral = 0;
+    const tablaCuerpo = document.getElementById('p_tabla_cuerpo');
+    tablaCuerpo.innerHTML = ""; 
+
+    let subtotalFlexo = 0;
+    let valorCirelTotal = 0;
+    let cantidadCireles = document.getElementById('cn_cir').value || 1;
 
     if (tipo === 'flexo') {
         const matSel = document.querySelector('.f-mat-card.selected');
@@ -1737,108 +1743,84 @@
         const ancho = document.getElementById('cw').value || 0;
         const alto = document.getElementById('ch').value || 0;
 
-        // --- FILA 1: MATERIAL ---
-        const subE_num = parseFloat(document.getElementById('f_sub').innerText.replace('$ ', '')) || 0;
+        subtotalFlexo = parseFloat(document.getElementById('f_sub').innerText.replace('$ ', '')) || 0;
+        
         const supCm2 = parseFloat(document.getElementById('f_res_cm2').innerText.replace(' cm²', '')) || 0;
         const pLamCostoUnit = currentLam === 'mate' ? parseFloat(localStorage.getItem('mf_lMate')) : 
                              (currentLam === 'brillante' ? parseFloat(localStorage.getItem('mf_lBrill')) : 0);
         const totalLaminado = supCm2 * pLamCostoUnit;
-        
-        const totalMaterial = subE_num - totalLaminado;
-        const unitMaterial = totalMaterial / cant;
+        const totalMaterial = subtotalFlexo - totalLaminado;
 
+        // FILA ETIQUETAS
         tablaCuerpo.innerHTML += `
             <tr>
                 <td><strong>Etiquetas: ${matNom}</strong><br><small>Medidas: ${ancho}x${alto} mm</small></td>
                 <td class="col-center">${cant}</td>
-                <td class="col-right">$ ${unitMaterial.toFixed(4)}</td>
+                <td class="col-right">$ ${(totalMaterial/cant).toFixed(4)}</td>
                 <td class="col-right">$ ${totalMaterial.toFixed(2)}</td>
             </tr>`;
         
-        // --- FILA 2: LAMINADO (Solo si existe) ---
+        // FILA LAMINADO
         if (currentLam !== 'ninguno') {
-            const unitLam = totalLaminado / cant;
             tablaCuerpo.innerHTML += `
                 <tr>
-                    <td><strong>Acabado: Laminado ${currentLam.toUpperCase()}</strong><br><small>Protección y acabado superficial</small></td>
+                    <td><strong>Acabado: Laminado ${currentLam.toUpperCase()}</strong></td>
                     <td class="col-center">${cant}</td>
-                    <td class="col-right">$ ${unitLam.toFixed(4)}</td>
+                    <td class="col-right">$ ${(totalLaminado/cant).toFixed(4)}</td>
                     <td class="col-right">$ ${totalLaminado.toFixed(2)}</td>
                 </tr>`;
         }
-        subtotalGeneral = subE_num;
+
+        if (vincularCirel) {
+            valorCirelTotal = parseFloat(document.getElementById('f_res_solo_cirel').innerText.replace('$ ', '')) || 0;
+        }
 
     } else {
-        // Lógica para Cirel
-        const bloque = document.getElementById('cr_bloque').innerText;
-        const cantC = document.getElementById('cn_cir').value;
-        const subC = parseFloat(document.getElementById('cr_sub').innerText.replace('$ ', '')) || 0;
-        const unitC = subC / cantC;
-
-        tablaCuerpo.innerHTML += `
-            <tr>
-                <td><strong>Servicio de Fotopolímeros (Cirel)</strong><br><small>Bloque: ${bloque}</small></td>
-                <td class="col-center">${cantC}</td>
-                <td class="col-right">$ ${unitC.toFixed(2)}</td>
-                <td class="col-right">$ ${subC.toFixed(2)}</td>
-            </tr>`;
-        subtotalGeneral = subC;
+        // Modo impresión solo Cirel
+        subtotalFlexo = parseFloat(document.getElementById('cr_sub').innerText.replace('$ ', '')) || 0;
+        tablaCuerpo.innerHTML += `<tr><td><strong>Cirel (Placas)</strong></td><td class="col-center">${cantidadCireles}</td><td class="col-right">$ ${(subtotalFlexo/cantidadCireles).toFixed(2)}</td><td class="col-right">$ ${subtotalFlexo.toFixed(2)}</td></tr>`;
     }
 
-    // --- FILA EXTRA: CIREL VINCULADO (Si aplica) ---
-    if (tipo === 'flexo' && vincularCirel) {
-        const valCirel = parseFloat(document.getElementById('f_res_solo_cirel').innerText.replace('$ ', '')) || 0;
-        tablaCuerpo.innerHTML += `
-            <tr>
-                <td><strong>Placas de Impresión (Cirel)</strong><br><small>Costo por grabado de polímeros</small></td>
-                <td class="col-center">1</td>
-                <td class="col-right">$ ${valCirel.toFixed(2)}</td>
-                <td class="col-right">$ ${valCirel.toFixed(2)}</td>
-            </tr>`;
-        subtotalGeneral += valCirel;
-    }
-
-    // 3. Totales Finales (Limpios)
+    // --- REESTRUCTURACIÓN DE LA TABLA DE TOTALES ---
     const ivaPorc = (parseFloat(localStorage.getItem('mf_iva')) || 15) / 100;
-    const ivaTotal = subtotalGeneral * ivaPorc;
+    const valorIVA = subtotalFlexo * ivaPorc;
+    const totalEtiquetasConIVA = subtotalFlexo + valorIVA;
+    const granTotalFinal = totalEtiquetasConIVA + valorCirelTotal;
+
+    const contenedorTotales = document.querySelector('.totals-table');
     
-    document.getElementById('p_subtotal').innerText = "$ " + subtotalGeneral.toFixed(2);
-    document.getElementById('p_iva').innerText = "$ " + ivaTotal.toFixed(2);
-    document.getElementById('p_total_final').innerText = "$ " + (subtotalGeneral + ivaTotal).toFixed(2);
-
-        // --- NUEVO CÁLCULO DE UNITARIO (SOLO ETIQUETAS PARA REPOSICIÓN) ---
-    const ivaPorcLocal = (parseFloat(localStorage.getItem('mf_iva')) || 15) / 100;
-    let unitReferencia = 0;
-    let textoRef = "";
-
-    if (tipo === 'flexo') {
-        // Solo tomamos el subtotal de Flexo (Material + Laminado), ignoramos el Cirel vinculado
-        const subEtiquetas = parseFloat(document.getElementById('f_sub').innerText.replace('$ ', '')) || 0;
-        const totalEtiquetasConIva = subEtiquetas * (1 + ivaPorcLocal);
-        const cantFlexo = parseFloat(document.getElementById('f_tot').value) || 1;
-        unitReferencia = totalEtiquetasConIva / cantFlexo;
-        textoRef = "Ref. Unitario Reposición (Inc. IVA)";
-    } else {
-        // Si es proforma solo de Cirel, el unitario es el total con IVA / cantidad de placas
-        unitReferencia = (subtotalGeneral * (1 + ivaPorcLocal)) / parseFloat(document.getElementById('cn_cir').value || 1);
-        textoRef = "Ref. Unitario Placa (Inc. IVA)";
-    }
-
-    const tablaTotales = document.querySelector('.totals-table tbody');
-    if (document.getElementById('p_ref_unit_iva')) document.getElementById('p_ref_unit_iva').remove();
-    
-    tablaTotales.insertAdjacentHTML('beforeend', `
-        <tr id="p_ref_unit_iva">
-            <td colspan="2" style="text-align:right; padding-top:8px;">
-                <span style="font-size:10px; color:#666; font-style:italic; background:#f5f5f5; padding:3px 6px; border-radius:4px;">
-                    ${textoRef}: $ ${unitReferencia.toFixed(4)}
-                </span>
-            </td>
-        </tr>`);
-
+    contenedorTotales.innerHTML = `
+        <tbody>
+            <tr><td class="t-label">Subtotal:</td><td>$ ${subtotalFlexo.toFixed(2)}</td></tr>
+            <tr><td class="t-label">IVA (15%):</td><td>$ ${valorIVA.toFixed(2)}</td></tr>
+            <tr><td class="t-label" style="font-weight:bold; color:#000; border-top:1px solid #ccc; padding-top:8px;">TOTAL ETIQUETAS:</td>
+                <td style="font-weight:bold; color:#000; border-top:1px solid #ccc; padding-top:8px;">$ ${totalEtiquetasConIVA.toFixed(2)}</td>
+            </tr>
+            ${valorCirelTotal > 0 ? `
+                <tr>
+                    <td class="t-label" style="padding-top:10px;">Cirel (Placas) cantidad ${cantidadCireles}:</td>
+                    <td style="padding-top:10px;">$ ${valorCirelTotal.toFixed(2)}</td>
+                </tr>
+            ` : ''}
+            <tr>
+                <td class="t-grand" style="font-size:16px; border-top:2px solid #0d47a1;">TOTAL A CANCELAR:</td>
+                <td class="t-grand" style="font-size:16px; border-top:2px solid #0d47a1;">$ ${granTotalFinal.toFixed(2)}</td>
+            </tr>
+            ${tipo === 'flexo' ? `
+                <tr>
+                    <td colspan="2" style="text-align:right; padding-top:12px;">
+                        <span style="font-size:10px; color:#666; font-style:italic; background:#f9f9f9; padding:4px 8px; border: 1px solid #eee; border-radius:4px;">
+                            Costo Unidad Etiquetas (Inc. IVA): $ ${(totalEtiquetasConIVA / (parseFloat(document.getElementById('f_tot').value) || 1)).toFixed(4)}
+                        </span>
+                    </td>
+                </tr>
+            ` : ''}
+        </tbody>
+    `;
 
     window.print();
 }
+
 
 // Registro del Service Worker para permitir la instalación
 if ('serviceWorker' in navigator) {
@@ -1852,4 +1834,5 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
 
