@@ -1,5 +1,5 @@
 {
-  "name": "Masterflexo Pro",
+  "name": "Masterflexo Pro v7.0",
   "short_name": "Masterflexo",
   "description": "Control Total de Producción - etiquetasflex",
   "start_url": "index.html",
@@ -21,3 +21,4 @@
     }
   ]
 }
+
