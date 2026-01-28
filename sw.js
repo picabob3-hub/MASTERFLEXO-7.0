@@ -1,4 +1,4 @@
-const CACHE_NAME = 'masterflexo-v1';
+const CACHE_NAME = 'masterflexo-v7';
 // Añadimos tu imagen a los archivos que se guardan en el celular
 const assets = [
   './',
@@ -18,3 +18,4 @@ self.addEventListener('fetch', e => {
     caches.match(e.request).then(res => res || fetch(e.request))
   );
 });
+
